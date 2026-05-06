@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ribbler
+      POSTGRES_USER: ribbler
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ribbler -d ribbler"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  core-module:
+    build:
+      context: ../core-module
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://ribbler:${POSTGRES_PASSWORD}@postgres:5432/ribbler
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      PORT: 8787
+      NODE_ENV: production
+    ports:
+      - "8787:8787"
+
+  control-panel:
+    build:
+      context: ../control-panel
+    restart: unless-stopped
+    depends_on:
+      - core-module
+    environment:
+      DATABASE_URL: postgres://ribbler:${POSTGRES_PASSWORD}@postgres:5432/ribbler
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${PUBLIC_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      CORE_MODULE_URL: http://core-module:8787
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
